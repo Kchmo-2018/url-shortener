@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     postgres_db: str = "shortener_db"
     postgres_host: str = "postgres"
     postgres_port: int = 5432
+    redis_host: str = "redis"
+    redis_port: int = 6379
+    base_url: str = "http://localhost:8000"
 
     @property
     def database_url(self) -> str:
