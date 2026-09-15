@@ -1,0 +1,8 @@
+name: Url
+variables:
+  - name: base_url
+    value: http://localhost:8000
+    description: ""
+  - name: short_Code
+    value: zRM9vT9
+    description: ""
