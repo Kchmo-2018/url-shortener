@@ -9,17 +9,16 @@ Un acortador de URLs es un problema fácil de explicar en una frase, pero para r
 ## Stack y por qué se eligió cada pieza
 
 | Tecnología | Rol en el proyecto |
-|---|---|
-| **FastAPI** (Python) | Framework de API moderno, rápido y muy usado en la industria hoy en día. |
-| **PostgreSQL** | Persistencia real: las URLs y su historial de clics sobreviven a un reinicio del servicio. |
-| **Redis** | Caché de lecturas frecuentes — evita golpear la base de datos en cada clic, clave para tráfico alto. |
-| **Docker + Docker Compose** | Empaqueta los tres servicios para que corran igual en cualquier máquina, sin el clásico "en mi PC funciona". |
-| **Git + GitHub** | Ramas por funcionalidad y Pull Requests, el mismo flujo de trabajo que se usa en equipos de desarrollo reales. |
+- **Python (FastAPI)** — API REST
+- **PostgreSQL** — almacenamiento persistente de URLs y contador de clics
+- **Redis** — caché de lecturas frecuentes (evita ir a Postgres en cada redirección)
+- **Nginx** — reverse proxy: único punto de entrada expuesto al exterior (puerto 80); la API queda solo accesible dentro de la red interna de Docker
+- **Docker + Docker Compose** — contenerización de todo el stack
+- **Git/GitHub** — control de versiones (siguiente paso: pipeline de CI/CD)
 
 ## Estructura del proyecto
 
 ```text
-url-shortener/
 ├── app/
 │ ├── main.py # endpoints de la API
 │ ├── config.py # configuración (variables de entorno)
@@ -27,6 +26,8 @@ url-shortener/
 │ ├── models.py # modelo de la tabla urls
 │ ├── schemas.py # esquemas de entrada/salida (Pydantic)
 │ └── redis_client.py # cliente de Redis
+├── nginx/
+│ └── nginx.conf # configuración del reverse proxy
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
@@ -45,42 +46,54 @@ Esto significa que solo las URLs que de verdad se están usando ocupan espacio e
 
 **Limitación conocida y a propósito:** el contador de clics que ves en `/api/urls/{code}` solo se actualiza en la visita que no estuvo cacheada. Las visitas que sí pegan en caché incrementan un contador aparte dentro de Redis (`clicks:{code}`), que todavía no se sincroniza automáticamente con Postgres. Sincronizar ambos contadores con un proceso en segundo plano queda como mejora pendiente.
 
-## Cómo correrlo
 
-Requisitos: Docker y Docker Compose instalados.
+## Cómo correrlo (con Docker, recomendado)
+
+Requisitos: Docker y Docker Compose instalados (en tu PC con Ubuntu, o en el VPS).
 
 ```bash
 cp .env.example .env
 docker compose up -d --build
-curl http://localhost:8000/health
+```
+
+Esto levanta 4 contenedores: `nginx` (único puerto expuesto al host, el **80**), `api`, `postgres` y `redis` (estos tres últimos solo visibles entre sí dentro de la red interna de Docker). Verifica que todo esté sano:
+
+```bash
+curl http://localhost/health
 ```
 
 ## Endpoints
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| POST | `/api/urls` | Crea una URL corta. Body: `{"target_url": "https://..."}` |
-| GET | `/api/urls/{code}` | Info de una URL corta (clics, fecha, destino) |
-| GET | `/{code}` | Redirige a la URL original (307) |
-| GET | `/health` | Chequeo de salud (Postgres + Redis) |
+| Método | Ruta                  | Descripción                                  |
+|--------|-----------------------|-----------------------------------------------|
+| POST   | `/api/urls`           | Crea una URL corta. Body: `{"target_url": "https://..."}` |
+| GET    | `/api/urls/{code}`    | Info de una URL corta (clics, fecha, destino) |
+| GET    | `/{code}`             | Redirige a la URL original (307)              |
+| GET    | `/health`             | Chequeo de salud (Postgres + Redis)           |
+| GET    | `/metrics`            | Métricas en formato Prometheus                |
 
 Ejemplo:
 
 ```bash
-curl -X POST http://localhost:8000/api/urls \
+curl -X POST http://localhost/api/urls \
   -H "Content-Type: application/json" \
-  -d '{"target_url": "https://www.anthropic.com"}'
+  -d '{"target_url": "https://www.google.com"}'
 
-curl -i http://localhost:8000/uL3Z7Kv
-# -> 307 redirect a https://www.anthropic.com/
+# -> {"short_code": "uL3Z7Kv", "short_url": "http://localhost/uL3Z7Kv", ...}
+
+curl -i http://localhost/uL3Z7Kv
+# -> 307 redirect a https://www.google.com/
 ```
 
-## Mejoras pendientes (siguientes fases del roadmap)
+## Variables de entorno relevantes
 
-- [ ] Reverse proxy con Nginx + TLS (Let's Encrypt) delante de la API.
-- [ ] Desplegar en un VPS Ubuntu con Docker.
-- [ ] Dashboard en Grafana leyendo métricas vía Prometheus.
-- [ ] Pipeline de CI/CD en GitHub Actions (test + build + deploy).
-- [ ] Sincronizar el contador de clics cacheado en Redis con Postgres.
-- [ ] Migrar el esquema con Alembic en vez de `create_all`.
-- [ ] Backups automáticos de Postgres.
+`BASE_URL` (en `.env`) define el host que se usa para armar el `short_url` que devuelve la API. Debe coincidir con la puerta de entrada real del stack: `http://localhost` en local (vía Nginx, puerto 80 implícito), y el dominio real con `https://` una vez desplegado en el VPS con TLS.
+
+## Cómo se probó este proyecto
+
+Todo el stack (`nginx`, `api`, `postgres`, `redis`) se levantó con `docker compose up -d --build` y se probó de extremo a extremo a través del reverse proxy: creación de URL, redirección (307), caché en Redis y chequeo de salud, todo pasando únicamente por el puerto 80 de Nginx — la API ya no queda expuesta directamente al host.
+
+
+## Qué demuestra
+
+Contenedores en producción, integración de una API con una base de datos relacional y una caché, diseño de un esquema con migraciones, y las bases para observabilidad y despliegue continuo — todo documentado y reproducible con un solo comando.
