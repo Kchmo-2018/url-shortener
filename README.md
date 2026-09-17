@@ -97,3 +97,28 @@ Todo el stack (`nginx`, `api`, `postgres`, `redis`) se levantó con `docker comp
 ## Qué demuestra
 
 Contenedores en producción, integración de una API con una base de datos relacional y una caché, diseño de un esquema con migraciones, y las bases para observabilidad y despliegue continuo — todo documentado y reproducible con un solo comando.
+
+## Como ver el Dashboard
+1. Crear un dashboard nuevo. En el menú de la izquierda, andá a "Dashboards" → botón "New" (arriba a la derecha) → "New Dashboard".
+
+2. Agregar el primer panel. Hacé clic en "Add visualization" (o "Add panel" según la versión). Te va a pedir elegir la fuente de datos — seleccioná Prometheus (la que ya conectamos).
+
+3. Configurar la query del primer panel. En el campo de métrica, poné:
+
+- shortener_urls_total
+
+Arriba a la derecha del panel, en el tipo de visualización, cambiá de "Time series" (línea de tiempo) a "Stat" — es un tipo de panel que muestra un solo número grande, ideal para un contador acumulado como este (que solo sube, no tiene sentido verlo como línea todavía con tan pocos datos).
+
+En el panel de opciones de la derecha, en "Panel options" → "Title", poné algo descriptivo como URLs creadas (total).
+
+Guardá el panel (botón "Apply" o "Save", arriba a la derecha).
+
+4. Agregar el segundo panel, repitiendo lo mismo pero con:
+
+- shortener_clicks_total
+
+- Y título Clics totales.
+
+5. Guardar el dashboard completo. Arriba a la derecha vas a ver un botón de guardar (ícono de disquete o "Save dashboard"). Ponele un nombre como URL Shortener - Overview y guardalo.
+
+Contame cómo te va con estos pasos — mandame una captura si te trabás en algún punto específico de la interfaz (a veces cambia un poco según la versión de Grafana).
