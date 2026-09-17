@@ -1,8 +1,8 @@
 import shortuuid
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 
 from app.config import settings
 from app.database import Base, engine, get_db
@@ -20,6 +20,21 @@ def health_check(db: Session = Depends(get_db)):
     db.execute(text("SELECT 1"))
     redis_client.ping()
     return {"status": "ok"}
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def metrics(db: Session = Depends(get_db)):
+    total_urls = db.query(func.count(URL.id)).scalar()
+    total_clicks = db.query(func.coalesce(func.sum(URL.click_count), 0)).scalar()
+    lines = [
+        "# HELP shortener_urls_total Total de URLs creadas",
+        "# TYPE shortener_urls_total counter",
+        f"shortener_urls_total {total_urls}",
+        "# HELP shortener_clicks_total Total de clics registrados",
+        "# TYPE shortener_clicks_total counter",
+        f"shortener_clicks_total {total_clicks}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 @app.post("/api/urls", response_model=URLResponse)
